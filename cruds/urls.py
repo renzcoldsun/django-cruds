@@ -159,8 +159,11 @@ def crud_for_model(model, urlprefix=None, login_rqd=False, perm_rqd=None,
     return urls
 
 
-def crud_for_app(app_label, urlprefix=None, login_rqd=False, perm_rqd=None,
-                   login_url=None):
+def crud_for_app(app_label,
+                 urlprefix=None,
+                 login_required=False,
+                 permission_required=None,
+                 login_url=None):
     """
     Returns list of ``url`` items to CRUD an app.
     """
@@ -169,7 +172,7 @@ def crud_for_app(app_label, urlprefix=None, login_rqd=False, perm_rqd=None,
     app = apps.get_app_config(app_label)
     urls = []
     for model in app.get_models():
-        urls += crud_for_model(model, urlprefix, login_rqd, perm_rqd,
-                               login_url)
+        urls += crud_for_model(model, urlprefix, login_required, 
+                               permission_required, login_url)
     return urls
 
