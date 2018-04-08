@@ -3,6 +3,7 @@ from __future__ import unicode_literals
 
 from django.conf.urls import url
 from django.apps import apps
+from django.contrib.auth.decorators import login_required, permission_required
 
 from . import utils
 from .views import (
@@ -14,6 +15,35 @@ from .views import (
 )
 
 
+class CrudsUrlValidatorException(Exception):
+    def __init__(self, message, errors):
+        super(CrudsUrlValidatorException, self).__init__(message)
+        self.errors = errors
+
+
+def create_url_view(view=None, login_reqd=False, permission_reqd=None,
+                    login_url=None):
+    if view == None:
+            raise CrudsUrlValidatorException(u"CRUDS URL VALIDATOR ERROR: \
+            View Required \
+            ")        
+    if login_reqd:
+        if permission_reqd != None:
+            raise CrudsUrlValidatorException(u"CRUDS URL VALIDATOR ERROR: \
+            Login Required and Permission Required cannot be both passed \
+            ")
+        return login_required(view)
+    else:
+        if permission_reqd != None:
+            if login_url == "" or login_url == None:
+                raise CrudsUrlValidatorException(u"CRUDS URL VALIDATOR \
+                    ERROR: Permission Required requires login_url \
+            ")
+            return permission_required(permission_reqd,
+                                       login_url=login_url)(view)
+        else:
+            return view
+
 def crud_urls(model,
               list_view=None,
               create_view=None,
@@ -23,6 +53,9 @@ def crud_urls(model,
               url_prefix=None,
               name_prefix=None,
               list_views=None,
+              login_reqd=False,
+              permission_reqd=None,
+              login_url='login',
               **kwargs):
     """Returns a list of url patterns for model.
 
@@ -43,31 +76,40 @@ def crud_urls(model,
     if list_view:
         urls.append(url(
             url_prefix + '$',
-            list_view,
-            name=utils.crud_url_name(model, utils.ACTION_LIST, name_prefix)
+            create_url_view(list_view, login_reqd, permission_reqd, login_url),
+            name=utils.crud_url_name(model, utils.ACTION_LIST,
+                                     name_prefix)
         ))
     if create_view:
         urls.append(url(
             url_prefix + r'new/$',
-            create_view,
+            create_url_view(create_view, login_reqd, permission_reqd,
+                            login_url),
+            #create_view,
             name=utils.crud_url_name(model, utils.ACTION_CREATE, name_prefix)
         ))
     if detail_view:
         urls.append(url(
             url_prefix + r'(?P<pk>\d+)/$',
-            detail_view,
+            create_url_view(detail_view, login_reqd, permission_reqd,
+                            login_url),
+            #detail_view,
             name=utils.crud_url_name(model, utils.ACTION_DETAIL, name_prefix)
         ))
     if update_view:
         urls.append(url(
             url_prefix + r'(?P<pk>\d+)/edit/$',
-            update_view,
+            create_url_view(update_view, login_reqd, permission_reqd,
+                            login_url),
+            #update_view,
             name=utils.crud_url_name(model, utils.ACTION_UPDATE, name_prefix)
         ))
     if delete_view:
         urls.append(url(
             url_prefix + r'(?P<pk>\d+)/remove/$',
-            delete_view,
+            create_url_view(delete_view, login_reqd, permission_reqd,
+                            login_url),
+            #delete_view,
             name=utils.crud_url_name(model, utils.ACTION_DELETE, name_prefix)
         ))
 
@@ -75,20 +117,25 @@ def crud_urls(model,
         for name, view in list_views.items():
             urls.append(url(
                 url_prefix + r'%s/$' % name,
-                view,
+                create_url_view(view, login_reqd, permission_reqd,
+                                login_url),
+                #view,
                 name=utils.crud_url_name(model, name, name_prefix)
             ))
 
     for name, view in kwargs.items():
         urls.append(url(
             url_prefix + r'(?P<pk>\d+)/%s/$' % name,
-            view,
+            create_url_view(view, login_reqd, permission_reqd,
+                            login_url),
+            #view,
             name=utils.crud_url_name(model, name, name_prefix)
         ))
     return urls
 
 
-def crud_for_model(model, urlprefix=None):
+def crud_for_model(model, urlprefix=None, login_rqd=False, perm_rqd=None,
+                   login_url=None):
     """Returns list of ``url`` items to CRUD a model.
     """
     model_lower = model.__name__.lower()
@@ -105,11 +152,15 @@ def crud_for_model(model, urlprefix=None):
         update_view=CRUDUpdateView.as_view(model=model),
         delete_view=CRUDDeleteView.as_view(model=model),
         url_prefix=urlprefix,
+        login_reqd=login_rqd,
+        permission_reqd=perm_rqd,
+        login_url=login_url
     )
     return urls
 
 
-def crud_for_app(app_label, urlprefix=None):
+def crud_for_app(app_label, urlprefix=None, login_rqd=False, perm_rqd=None,
+                   login_url=None):
     """
     Returns list of ``url`` items to CRUD an app.
     """
@@ -118,5 +169,7 @@ def crud_for_app(app_label, urlprefix=None):
     app = apps.get_app_config(app_label)
     urls = []
     for model in app.get_models():
-        urls += crud_for_model(model, urlprefix)
+        urls += crud_for_model(model, urlprefix, login_rqd, perm_rqd,
+                               login_url)
     return urls
+
